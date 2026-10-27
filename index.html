@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,8 +10,8 @@
   <main class="shell">
     <header class="masthead">
       <p class="eyebrow">OTTv2 / PLAYHTML BOARD HALL</p>
-      <h1>Board hall</h1>
-      <p class="lede">Open a table, take one of the two seats, and let everyone else watch. Click any board to pull up a chair.</p>
+      <h1>OTTv2</h1>
+      <p class="lede">Tạo phòng, thi đấu cùng bạn bè và lưu lại lịch sử các trận đấu.</p>
       <div class="identity">
         <label for="player-name">You are</label>
         <input id="player-name" maxlength="24" autocomplete="off" spellcheck="false">
@@ -20,6 +20,34 @@
     </header>
 
     <p id="notice" class="notice" hidden></p>
+
+    <section class="panel account-panel" aria-labelledby="account-heading">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">PLAYER ACCOUNT</p>
+          <h2 id="account-heading">Account &amp; Game Log</h2>
+        </div>
+        <button id="account-logout" class="secondary" type="button" hidden>Đăng xuất</button>
+      </div>
+      <p id="account-status" class="muted">Chưa đăng nhập.</p>
+      <form id="account-form" class="account-form">
+        <label for="account-username">Tên tài khoản</label>
+        <input id="account-username" name="username" minlength="3" maxlength="24" autocomplete="username" required>
+        <label for="account-password">Mật khẩu</label>
+        <input id="account-password" name="password" type="password" minlength="8" autocomplete="current-password" required>
+        <div class="account-actions">
+          <button class="primary" type="submit">Đăng nhập</button>
+          <button id="account-register" class="secondary" type="button">Đăng ký</button>
+        </div>
+      </form>
+      <div class="log-heading">
+        <h3>Lịch sử trận đấu</h3>
+        <button id="refresh-log" class="secondary" type="button">Làm mới</button>
+      </div>
+      <p class="muted">Game Log được lưu trên máy chủ OTTv2. Đăng nhập để xem lịch sử của tài khoản này.</p>
+      <ol id="game-log" class="game-log"></ol>
+    </section>
+
 
     <section id="lobby" class="panel">
       <div class="section-heading">

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OTTv2 — 5 phòng</title>
+<style>
+:root{--bg:#101827;--panel:#182338;--panel2:#202d46;--line:#34435e;--text:#eef4ff;--muted:#aab7ce;--accent:#7dd3fc;--danger:#fb7185;--good:#86efac;--cell:min(7vw,58px)}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#243554 0,#101827 55%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+.wrap{width:min(1160px,96vw);margin:0 auto;padding:16px 0 30px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.title h1{margin:0;font-size:clamp(25px,3vw,36px)}.title p{margin:6px 0;color:var(--muted)}
+.panel{background:rgba(24,35,56,.94);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 16px 50px #0004}.hidden{display:none!important}
+button{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:9px 13px;border-radius:10px;cursor:pointer;font-weight:700}button:hover{filter:brightness(1.15)}button:disabled{opacity:.45;cursor:not-allowed}
+.rooms{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0}.room-card{background:rgba(24,35,56,.94);border:1px solid var(--line);border-radius:15px;padding:14px}.room-card h3{margin:0 0 8px}.room-card p{margin:5px 0;color:var(--muted);font-size:14px}.room-card .actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.free{color:var(--good)}.busy{color:#fbbf24}.full{color:var(--danger)}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0}.player{border:2px solid var(--line);border-radius:14px;padding:12px}.player.active{border-color:var(--accent);box-shadow:0 0 0 3px #7dd3fc22}.p1{color:#fca5a5}.p2{color:#93c5fd}.player strong{font-size:18px}.player small{display:block;color:var(--muted);margin-top:4px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.status{min-height:24px;color:var(--muted);margin:8px 0 14px}.status.win{color:var(--good);font-weight:800}.status.err{color:var(--danger);font-weight:700}.spectator{color:#c4b5fd;font-weight:800}
+.board-wrap{display:flex;justify-content:center}.board{display:grid;grid-template-columns:repeat(9,var(--cell));grid-template-rows:repeat(9,var(--cell));gap:2px;background:#0a1020;padding:7px;border:2px solid #52637e;border-radius:12px;touch-action:none}.cell{position:relative;width:var(--cell);height:var(--cell);display:flex;align-items:center;justify-content:center;background:#d8c39a;color:#111827;cursor:pointer;user-select:none}.cell:nth-child(odd){background:#c6ae7e}.cell.selected{outline:4px solid var(--accent);outline-offset:-4px}.cell.legal{box-shadow:inset 0 0 0 4px #86efacaa}.cell.capture{box-shadow:inset 0 0 0 4px #fb7185cc}.coord{position:absolute;font-size:9px;color:#594b32;left:3px;top:2px;font-weight:700}.piece{width:76%;height:76%;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:clamp(22px,4vw,34px);filter:drop-shadow(0 4px 3px #0006);border:3px solid #fff8}.piece.p1{background:#8f2738}.piece.p2{background:#245a9a}.piece.lock{opacity:.8}
+.rules{margin-top:16px;color:var(--muted);font-size:14px;line-height:1.6}.rules b{color:var(--text)}.legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}.badge{padding:5px 9px;border:1px solid var(--line);border-radius:999px;background:#111a2b}.footer{margin-top:14px;color:#7787a1;font-size:12px;text-align:center}
+.lobby-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}.feature-card{background:rgba(24,35,56,.94);border:1px solid var(--line);border-radius:15px;padding:16px;margin:12px 0}.feature-card h2{margin:0 0 8px}.feature-card p{color:var(--muted)}.tourney-list{display:grid;gap:8px;margin-top:12px}.tourney-row{padding:10px;border:1px solid var(--line);border-radius:10px;background:#111a2b}.accent-btn{border-color:#0ea5e9;background:#075985}.bot-btn{border-color:#a78bfa;background:#4c1d95}
+@media(max-width:900px){.rooms{grid-template-columns:repeat(2,1fr)}}@media(max-width:650px){.rooms{grid-template-columns:1fr}.players{grid-template-columns:1fr}.top{display:block}.panel{padding:10px}.board{padding:4px;gap:1px}.cell{font-size:12px}.piece{border-width:2px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="ottv2" can-play></div>
+  <div class="footer">OTTv2 • 5 phòng • 2 người/phòng • có chế độ Spectate • đồng bộ bằng playhtml</div>
+</div>
+
+<script type="module">
+import { playhtml, html, nothing } from "https://unpkg.com/playhtml";
+
+const EMPTY=".";
+const TYPES=["dam","la","keo"];
+const ICON={dam:"👊",la:"🍃",keo:"✂️"};
+const COLS="abcdefghi";
+const ROOM_COUNT=5;
+const STORE_ID="ottv2-rooms-v1";
+
+function emptyBoard(){return Array.from({length:9},()=>Array(9).fill(EMPTY));}
+function initialBoard(){
+  const b=emptyBoard();
+  const top=[[1,1,"dam"],[1,3,"la"],[1,5,"keo"],[1,7,"dam"],[2,2,"la"],[2,4,"keo"],[2,6,"dam"],[3,3,"la"],[3,5,"keo"]];
+  const bot=[[7,1,"keo"],[7,3,"dam"],[7,5,"la"],[7,7,"keo"],[6,2,"dam"],[6,4,"la"],[6,6,"keo"],[5,3,"dam"],[5,5,"la"]];
+  for(const [r,c,t] of top)b[r][c]="p1"+t;
+  for(const [r,c,t] of bot)b[r][c]="p2"+t;
+  return b;
+}
+function newRoom(id){return{id,board:initialBoard(),players:{p1:null,p2:null},turn:"p1",winner:null,message:"Phòng trống. Hãy tham gia hoặc spectate.",started:false};}
+function defaultData(){return{rooms:Array.from({length:ROOM_COUNT},(_,i)=>newRoom(i+1)),tournament:{title:"OTTv2 Open",participants:[],started:false,rounds:[]}};}
+
+let myPid=null;
+let selected=null;
+let currentRoom=null;
+let store=null;
+let page="lobby";
+let practice=null;
+let botDifficulty="normal";
+
+function owner(piece){return piece===EMPTY?null:piece.slice(0,2);}
+function typeOf(piece){return piece===EMPTY?null:piece.slice(2);}
+function inside(r,c){return r>=0&&r<9&&c>=0&&c<9;}
+function cloneBoard(b){return b.map(row=>row.slice());}
+function coord(r,c){return COLS[c]+(r+1);}
+function canCapture(attacker,defender){
+  const a=typeOf(attacker),d=typeOf(defender);
+  if(!a||!d||a===d)return false;
+  return (a==="dam"&&d==="keo")||(a==="keo"&&d==="la")||(a==="la"&&d==="dam");
+}
+function validStep(board,fr,fc,tr,tc){
+  if(!inside(fr,fc)||!inside(tr,tc))return false;
+  const dr=Math.abs(tr-fr),dc=Math.abs(tc-fc);
+  if((dr===0&&dc===0)||dr>1||dc>1)return false;
+  const src=board[fr][fc],dst=board[tr][tc];
+  if(src===EMPTY||owner(dst)===owner(src))return false;
+  return dst===EMPTY||canCapture(src,dst);
+}
+function hasWinByGoal(board,p){
+  const a1=board[0][0],i9=board[8][8];
+  return (a1!==EMPTY&&owner(a1)===p)||(i9!==EMPTY&&owner(i9)===p);
+}
+function hasWinByType(board,p){
+  const enemy=p==="p1"?"p2":"p1";
+  for(const t of TYPES){
+    let count=0;
+    for(let r=0;r<9;r++)for(let c=0;c<9;c++)if(board[r][c]===enemy+t)count++;
+    if(count===0)return true;
+  }
+  return false;
+}
+function winnerFor(board,p){return hasWinByGoal(board,p)||hasWinByType(board,p);}
+function getRoom(data,id){return data.rooms[id-1];}
+function isPlayer(room){if(room.players.p1===myPid)return"p1";if(room.players.p2===myPid)return"p2";return null;}
+function occupied(room){return Number(!!room.players.p1)+Number(!!room.players.p2);}
+function clearSelection(){selected=null;store?.requestUpdate();}
+
+function joinRoom(setData,id,slot){
+  if(!myPid)return;
+  setData(d=>{
+    const room=getRoom(d,id);
+    if(room.winner)return;
+    if(room.players[slot]===null||room.players[slot]===myPid){
+      room.players[slot]=myPid;
+      room.message=`${slot==="p1"?"Người chơi 1":"Người chơi 2"} đã tham gia phòng ${id}.`;
+      currentRoom=id;selected=null;
+    }
+  });
+}
+function spectateRoom(id){currentRoom=id;selected=null;store?.requestUpdate();}
+function leaveRoom(setData,id){
+  setData(d=>{
+    const room=getRoom(d,id);
+    if(room.players.p1===myPid)room.players.p1=null;
+    if(room.players.p2===myPid)room.players.p2=null;
+    room.message=`Một người chơi đã rời phòng ${id}.`;
+  });
+  if(currentRoom===id){currentRoom=null;selected=null;}
+}
+function resetRoom(setData,id){
+  setData(d=>{
+    const room=getRoom(d,id);
+    if(room.players.p1!==myPid&&room.players.p2!==myPid)return;
+    const p1=room.players.p1,p2=room.players.p2;
+    d.rooms[id-1]=newRoom(id);
+    d.rooms[id-1].players={p1,p2};
+    d.rooms[id-1].message=`Phòng ${id} đã tạo ván mới. Người chơi 1 đi trước.`;
+  });
+  selected=null;
+}
+function move(setData,room,fr,fc,tr,tc){
+  const p=isPlayer(room);
+  if(!p||room.winner||room.players.p1===null||room.players.p2===null||room.turn!==p)return;
+  if(!validStep(room.board,fr,fc,tr,tc))return;
+  const b=cloneBoard(room.board),piece=b[fr][fc],target=b[tr][tc];
+  b[fr][fc]=EMPTY;b[tr][tc]=piece;
+  const win=winnerFor(b,p)?p:null;
+  setData(d=>{
+    const r=getRoom(d,currentRoom);
+    r.board=b;r.started=true;r.winner=win;r.turn=win?r.turn:(p==="p1"?"p2":"p1");
+    r.message=win?(win==="p1"?"Người chơi 1 thắng!":"Người chơi 2 thắng!"):`${p==="p1"?"Người chơi 1":"Người chơi 2"} đi ${coord(fr,fc)} → ${coord(tr,tc)}${target!==EMPTY?" và ăn quân.":"."}`;
+  });
+  selected=null;
+}
+function cellClick(data,setData,r,c){
+  if(currentRoom===null)return;
+  const room=getRoom(data,currentRoom),me=isPlayer(room);
+  if(!me||room.winner||room.turn!==me)return;
+  const piece=room.board[r][c];
+  const mine=piece!==EMPTY&&owner(piece)===me;
+  if(selected){
+    if(validStep(room.board,selected.r,selected.c,r,c)){move(setData,room,selected.r,selected.c,r,c);return;}
+    if(mine){selected={r,c};store?.requestUpdate();return;}
+    selected=null;store?.requestUpdate();return;
+  }
+  if(mine){selected={r,c};store?.requestUpdate();}
+}
+function pieceView(piece){if(piece===EMPTY)return nothing;return html`<div class="piece ${owner(piece)==="p1"?"p1":"p2"}">${ICON[typeOf(piece)]}</div>`;}
+function boardView(data,setData,room){
+  const cells=[];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const p=room.board[r][c];
+    const selectedHere=selected&&selected.r===r&&selected.c===c;
+    const legal=selected?validStep(room.board,selected.r,selected.c,r,c):false;
+    const capture=legal&&p!==EMPTY;
+    cells.push(html`<div class="cell ${selectedHere?"selected":""} ${legal?"legal":""} ${capture?"capture":""}" @click=${()=>cellClick(data,setData,r,c)}><span class="coord">${coord(r,c)}</span>${pieceView(p)}</div>`);
+  }
+  return html`<div class="board">${cells}</div>`;
+}
+function roomCard(room,setData){
+  const count=occupied(room),mine=isPlayer(room);
+  const state=count===0?"Trống":count===1?"1/2 người":"2/2 người";
+  const stateClass=count===0?"free":count===1?"busy":"full";
+  return html`<div class="room-card">
+    <h3>Phòng ${room.id}</h3>
+    <p class="${stateClass}"><b>${state}</b></p>
+    <p>P1: ${room.players.p1?"Đã có người":"Trống"}</p>
+    <p>P2: ${room.players.p2?"Đã có người":"Trống"}</p>
+    <div class="actions">
+      ${room.players.p1===null?html`<button @click=${()=>joinRoom(setData,room.id,"p1")}>Chơi P1</button>`:nothing}
+      ${room.players.p2===null?html`<button @click=${()=>joinRoom(setData,room.id,"p2")}>Chơi P2</button>`:nothing}
+      <button @click=${()=>spectateRoom(room.id)}>👁 Spectate</button>
+    </div>
+  </div>`;
+}
+function statusText(room){
+  if(room.winner)return room.winner==="p1"?"🏆 Người chơi 1 thắng!":"🏆 Người chơi 2 thắng!";
+  if(room.players.p1===null||room.players.p2===null)return"Đang chờ đủ 2 người chơi...";
+  return room.turn==="p1"?"Lượt Người chơi 1":"Lượt Người chơi 2";
+}
+
+function goLobby(){page="lobby";currentRoom=null;selected=null;practice=null;store?.requestUpdate();}
+function startPractice(difficulty="normal"){
+  botDifficulty=difficulty;
+  practice={board:initialBoard(),turn:"p1",winner:null,message:"Bạn đi trước. Đánh với bot!",botName:difficulty==="easy"?"Bot Tập Sự":difficulty==="hard"?"Bot Cao Thủ":"Bot Chiến Thuật"};
+  currentRoom="practice";page="game";selected=null;store?.requestUpdate();
+}
+function legalMoves(board,p){
+  const out=[];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    if(owner(board[r][c])!==p)continue;
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+      const nr=r+dr,nc=c+dc;
+      if(inside(nr,nc)&&validStep(board,r,c,nr,nc))out.push({fr:r,fc:c,tr:nr,tc:nc});
+    }
+  }
+  return out;
+}
+function botTurn(){
+  if(!practice||practice.winner||practice.turn!=="p2")return;
+  const b=practice.board,moves=legalMoves(b,"p2");
+  if(!moves.length){practice.winner="p1";practice.message="Bot hết nước đi — bạn thắng!";store?.requestUpdate();return;}
+  let chosen;
+  const captures=moves.filter(m=>b[m.tr][m.tc]!==EMPTY);
+  if(botDifficulty==="hard"&&captures.length)chosen=captures.sort((a,z)=>{const va=typeValue(typeOf(b[a.tr][a.tc])),vz=typeValue(typeOf(b[z.tr][z.tc]));return vz-va;})[0];
+  else if(botDifficulty==="normal"&&captures.length&&Math.random()<0.75)chosen=captures[Math.floor(Math.random()*captures.length)];
+  else chosen=moves[Math.floor(Math.random()*moves.length)];
+  applyPracticeMove(chosen.fr,chosen.fc,chosen.tr,chosen.tc,"p2");
+}
+function typeValue(t){return t==="dam"?3:t==="la"?2:1;}
+function applyPracticeMove(fr,fc,tr,tc,p){
+  if(!practice||practice.winner||practice.turn!==p||!validStep(practice.board,fr,fc,tr,tc))return;
+  const b=cloneBoard(practice.board),target=b[tr][tc];
+  b[tr][tc]=b[fr][fc];b[fr][fc]=EMPTY;
+  practice.board=b;
+  if(winnerFor(b,p)){practice.winner=p;practice.message=p==="p1"?"🏆 Bạn thắng!":"🤖 Bot thắng ván này.";}
+  else {practice.turn=p==="p1"?"p2":"p1";practice.message=p==="p1"?"Bot đang suy nghĩ...":"Đến lượt bạn.";}
+  selected=null;
+  if(!practice.winner&&practice.turn==="p2")botTurn();
+  store?.requestUpdate();
+}
+function practiceClick(r,c){
+  if(!practice||practice.winner||practice.turn!=="p1")return;
+  const piece=practice.board[r][c],mine=piece!==EMPTY&&owner(piece)==="p1";
+  if(selected){
+    if(validStep(practice.board,selected.r,selected.c,r,c)){applyPracticeMove(selected.r,selected.c,r,c,"p1");return;}
+    if(mine){selected={r,c};store?.requestUpdate();return;}
+    selected=null;store?.requestUpdate();return;
+  }
+  if(mine){selected={r,c};store?.requestUpdate();}
+}
+function practiceBoardView(){
+  const cells=[];
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){
+    const piece=practice.board[r][c],sel=selected&&selected.r===r&&selected.c===c;
+    const legal=selected&&validStep(practice.board,selected.r,selected.c,r,c);
+    cells.push(html`<div class="cell ${sel?"selected":""} ${legal?"legal":""} ${legal&&piece!==EMPTY?"capture":""}" @click=${()=>practiceClick(r,c)}><span class="coord">${coord(r,c)}</span>${pieceView(piece)}</div>`);
+  }
+  return html`<div class="board">${cells}</div>`;
+}
+function registerTournament(setData){
+  if(!myPid)return;
+  setData(d=>{
+    const t=d.tournament||(d.tournament={title:"OTTv2 Open",participants:[],started:false,rounds:[]});
+    if(!t.started&&!t.participants.includes(myPid))t.participants.push(myPid);
+  });
+}
+function startTournament(setData){
+  setData(d=>{
+    const t=d.tournament;
+    if(!t||t.started||t.participants.length<2)return;
+    const players=t.participants.slice();
+    const first=[];
+    for(let i=0;i<players.length;i+=2)first.push({p1:players[i],p2:players[i+1]||null,winner:null});
+    t.rounds=[first];t.started=true;
+  });
+}
+function tournamentView(data,setData){
+  const t=data.tournament||(data.tournament={title:"OTTv2 Open",participants:[],started:false,rounds:[]});
+  const joined=t.participants.includes(myPid);
+  return html`<div class="top"><div class="title"><h1>🏆 Tổ chức thi đấu</h1><p>Đăng ký người chơi và tạo nhánh đấu OTTv2.</p></div><div class="panel"><b>${t.title||"OTTv2 Open"}</b><div style="color:#aab7ce;font-size:12px;margin-top:4px">${t.participants.length} người đăng ký</div></div></div>
+    <div class="controls"><button @click=${goLobby}>← Trang chủ</button>${!t.started?html`<button class="accent-btn" @click=${()=>registerTournament(setData)} ${joined?"disabled":""}>${joined?"Đã đăng ký":"Đăng ký thi đấu"}</button><button @click=${()=>startTournament(setData)} ${t.participants.length<2?"disabled":""}>Tạo nhánh đấu</button><button @click=${()=>setData(d=>{d.tournament={title:"OTTv2 Open",participants:[],started:false,rounds:[]};})}>Làm mới giải</button>`:nothing}</div>
+    <div class="feature-card"><h2>Danh sách đăng ký</h2><p>Người chơi được nhận diện bằng mã PlayHTML công khai.</p><div class="tourney-list">${t.participants.length?t.participants.map((id,i)=>html`<div class="tourney-row">${i+1}. ${id===myPid?"Bạn":String(id).slice(0,12)+"…"}</div>`):html`<p>Chưa có người đăng ký. Bấm “Đăng ký thi đấu” để tham gia.</p>`}</div></div>
+    ${t.started?html`<div class="feature-card"><h2>Nhánh đấu</h2><p>Nhánh được tạo từ danh sách đăng ký; nếu số người lẻ, một người sẽ chờ đối thủ ở vòng đầu.</p>${t.rounds.map((round,ri)=>html`<h3>Vòng ${ri+1}</h3><div class="tourney-list">${round.map((m,i)=>html`<div class="tourney-row">Trận ${i+1}: ${String(m.p1).slice(0,10)}… vs ${m.p2?String(m.p2).slice(0,10)+"…":"Miễn đấu"} ${m.winner?" • Đã có kết quả":""}</div>`)}</div>`)}</div>`:nothing}
+    <div class="feature-card"><b>Lưu ý:</b><p>Đây là bảng đăng ký và tạo nhánh đấu đồng bộ qua PlayHTML. Kết quả các trận và tự động chuyển vòng chưa được kết nối với các phòng chơi.</p></div>`;
+}
+
+function gameView(data,setData){
+  if(page==="tournament")return tournamentView(data,setData);
+  if(currentRoom==="practice"&&practice){
+    return html`<div class="top"><div class="title"><h1>🤖 Đấu tập với Bot</h1><p>${practice.botName} • độ khó: ${botDifficulty==="easy"?"Dễ":botDifficulty==="hard"?"Khó":"Thường"}</p></div><div class="panel"><b>Chế độ luyện tập</b><div style="color:#aab7ce;font-size:12px;margin-top:4px">Ván đấu riêng trên trình duyệt này</div></div></div>
+      <div class="controls"><button @click=${goLobby}>← Trang chủ</button><button @click=${()=>startPractice(botDifficulty)}>↻ Chơi lại</button><button @click=${()=>startPractice("easy")}>Bot dễ</button><button @click=${()=>startPractice("normal")}>Bot thường</button><button @click=${()=>startPractice("hard")}>Bot khó</button></div>
+      <div class="players"><div class="player ${practice.turn==="p1"?"active":""}"><strong class="p1">🔴 Bạn</strong><small>${practice.turn==="p1"?"Đến lượt bạn": "Chờ lượt"}</small></div><div class="player ${practice.turn==="p2"?"active":""}"><strong class="p2">🤖 ${practice.botName}</strong><small>${practice.turn==="p2"?"Đang đi":"Chờ lượt"}</small></div></div>
+      <div class="panel"><div class="status ${practice.winner?"win":""}">${practice.message}</div><div class="board-wrap">${practiceBoardView()}</div><div class="legend"><span class="badge">👊 Đấm ăn ✂️ Kéo</span><span class="badge">✂️ Kéo ăn 🍃 Lá</span><span class="badge">🍃 Lá ăn 👊 Đấm</span><span class="badge">Cùng loại: không ăn</span></div></div>
+      <div class="panel rules"><b>Luật:</b> đi một ô theo 8 hướng; thắng khi ăn sạch một loại quân đối phương hoặc đưa quân vào a1/i9.</div>`;
+  }
+  if(currentRoom===null){
+    return html`<div class="top"><div class="title"><h1>👊 🍃 ✂️ OTTv2</h1><p>Oẳn tù tì trên bàn cờ 9×9 — chọn phòng để chơi</p></div><div class="panel"><b>5 phòng chơi</b><div style="color:#aab7ce;font-size:12px;margin-top:4px">Mỗi phòng tối đa 2 người chơi. Người thứ 3 có thể Spectate.</div></div></div>
+      <div class="lobby-actions">
+        <button class="accent-btn" @click=${()=>{page="tournament";store?.requestUpdate()}}>🏆 Tổ chức thi đấu</button>
+        <button @click=${()=>startPractice("normal")}>⚔️ Đấu thử</button>
+        <button class="bot-btn" @click=${()=>startPractice("easy")}>🤖 Đấu Bot dễ</button>
+        <button class="bot-btn" @click=${()=>startPractice("normal")}>🤖 Đấu Bot thường</button>
+        <button class="bot-btn" @click=${()=>startPractice("hard")}>🤖 Đấu Bot khó</button>
+      </div>
+      <div class="rooms">${data.rooms.map(r=>roomCard(r,setData))}</div>
+      <div class="panel rules"><b>Đấu thử:</b> chơi một ván riêng trên trình duyệt này. <b>Bot:</b> chọn độ khó Dễ, Thường hoặc Khó. <b>Tổ chức thi đấu:</b> đăng ký người chơi và tạo nhánh đấu. <br><br><b>Chế độ Spectate:</b> chọn 👁 Spectate để xem bàn cờ và lượt chơi mà không chiếm P1/P2. Bạn có thể quay lại danh sách phòng bằng nút “← Danh sách phòng”.</div>`;
+  }
+  const room=getRoom(data,currentRoom),me=isPlayer(room),spectator=!me;
+  return html`<div class="top"><div class="title"><h1>👊 🍃 ✂️ OTTv2</h1><p>Phòng ${room.id} • ${spectator?"👁 Chế độ Spectate":`Bạn là ${me==="p1"?"Người chơi 1":"Người chơi 2"}`}</p></div><div class="panel"><b>Phòng ${room.id}</b><div style="color:#aab7ce;font-size:12px;margin-top:4px">${occupied(room)}/2 người chơi • ${spectator?"Bạn đang xem":"Bạn đang chơi"}</div></div></div>
+    <div class="controls"><button @click=${()=>{currentRoom=null;selected=null;store?.requestUpdate()}}>← Danh sách phòng</button>${me?html`<button @click=${()=>leaveRoom(setData,room.id)}>Rời phòng</button><button @click=${()=>resetRoom(setData,room.id)}>↻ Ván mới</button>`:nothing}</div>
+    <div class="players"><div class="player ${room.turn==="p1"?"active":""}"><strong class="p1">🔴 Người chơi 1</strong><small>${room.players.p1?(room.players.p1===myPid?"Bạn":"Đã kết nối"):"Trống"}</small></div><div class="player ${room.turn==="p2"?"active":""}"><strong class="p2">🔵 Người chơi 2</strong><small>${room.players.p2?(room.players.p2===myPid?"Bạn":"Đã kết nối"):"Trống"}</small></div></div>
+    <div class="panel"><div class="status ${room.winner?"win":""} ${spectator?"spectator":""}">${spectator?"👁 Đang spectate • ":""}${statusText(room)}</div><div class="board-wrap">${boardView(data,setData,room)}</div><div class="legend"><span class="badge">👊 Đấm ăn ✂️ Kéo</span><span class="badge">✂️ Kéo ăn 🍃 Lá</span><span class="badge">🍃 Lá ăn 👊 Đấm</span><span class="badge">Cùng loại: không ăn</span></div></div>
+    <div class="panel rules"><b>Luật:</b> mỗi lượt đi 1 ô theo 8 hướng. Không đi vào quân mình. Ăn theo Đấm → Kéo → Lá → Đấm. Thắng khi ăn sạch một loại quân đối phương hoặc đưa quân vào <b>a1</b>/<b>i9</b>.</div>`;
+}
+
+// ID phan tu DOM phai trung voi ID dang ky PlayHTML.
+// Room co dinh giup link ?room=... van dung chung mot kho du lieu.
+store=playhtml.register("ottv2",{defaultData:defaultData(),view:({data,setData})=>gameView(data,setData)});
+playhtml.init({room:"ottv2-arena",cursors:{enabled:true,room:"ottv2"}});
+await playhtml.ready;
+myPid=playhtml.presence.getMyIdentity().publicKey;
+playhtml.presence.setMyPresence("status",{text:"online"});
+store.requestUpdate();
+</script>
+</body>
+</html>

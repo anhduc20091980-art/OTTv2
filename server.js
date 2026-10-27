@@ -10,6 +10,7 @@ const publicDirectory = __dirname;
 const dataDirectory = path.join(__dirname, 'data');
 const usersFile = path.join(dataDirectory, 'users.json');
 const logsFile = path.join(dataDirectory, 'gamelog.json');
+const boardRoomsFile = path.join(dataDirectory, 'boardrooms.json');
 fs.mkdirSync(dataDirectory, { recursive: true });
 
 const sessions = new Map();
@@ -85,6 +86,25 @@ function resolveFilePath(pathname) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   try {
+    if (url.pathname === '/api/board-room') {
+      const rooms = readJson(boardRoomsFile, {});
+      if (req.method === 'GET') {
+        const code = String(url.searchParams.get('room') || '').toUpperCase();
+        if (!/^[A-Z0-9-]{3,12}$/.test(code)) return sendJson(res, 400, { error: 'Mã phòng không hợp lệ.' });
+        return rooms[code] ? sendJson(res, 200, { game: rooms[code] }) : sendJson(res, 404, { error: 'Không tìm thấy phòng.' });
+      }
+      if (req.method === 'POST') {
+        const input = await readBody(req);
+        const code = String(input.room || '').toUpperCase();
+        if (!/^[A-Z0-9-]{3,12}$/.test(code) || !['chess','xiangqi','go'].includes(input.kind)) return sendJson(res, 400, { error: 'Mã phòng hoặc trò chơi không hợp lệ.' });
+        const safe = { room: code, kind: input.kind, fen: typeof input.fen === 'string' ? input.fen.slice(0, 200) : null, state: input.state && typeof input.state === 'object' ? input.state : null, turn: input.turn === 'b' ? 'b' : 'w', history: Array.isArray(input.history) ? input.history.slice(-300).map(x => String(x).slice(0,120)) : [], ended: !!input.ended, updated: Date.now() };
+        rooms[code] = safe;
+        const keys = Object.keys(rooms); if (keys.length > 500) for (const old of keys.slice(0, keys.length-500)) delete rooms[old];
+        writeJson(boardRoomsFile, rooms);
+        return sendJson(res, 200, { ok: true, room: code, updated: safe.updated });
+      }
+      return sendJson(res, 405, { error: 'Phương thức không được hỗ trợ.' }, { allow: 'GET, POST' });
+    }
     if (url.pathname.startsWith('/api/')) {
       if (req.method === 'GET' && url.pathname === '/api/me') {
         return sendJson(res, 200, { user: currentUser(req) });

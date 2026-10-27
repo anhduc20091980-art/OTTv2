@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OTTv2 · Bot Lab</title><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="masthead">
+    <p class="eyebrow">OTTV2 / LOCAL BOT TESTING</p><h1>Bot Lab</h1>
+    <p class="lede">Cho hai Bot đấu với nhau ngay trong trình duyệt để kiểm thử luật OTTv2 mà không cần người chơi thứ hai.</p>
+    <p><a class="back-link" href="/">← Quay lại sảnh OTTv2</a></p>
+  </header>
+  <section class="panel">
+    <div class="section-heading"><div><p class="eyebrow">BOT VS BOT</p><h2>Kiểm thử nhanh</h2></div><span id="bot-status" class="status">Sẵn sàng</span></div>
+    <div class="bot-controls">
+      <label>Bot Đỏ <select id="bot-red"><option value="easy">Dễ · chọn nước hợp lệ</option><option value="smart" selected>Trung bình · ưu tiên ăn quân và góc</option></select></label>
+      <label>Bot Lam <select id="bot-blue"><option value="easy">Dễ · chọn nước hợp lệ</option><option value="smart" selected>Trung bình · ưu tiên ăn quân và góc</option></select></label>
+      <label>Tốc độ <select id="bot-speed"><option value="700">Chậm</option><option value="250" selected>Vừa</option><option value="50">Nhanh</option></select></label>
+      <label>Số ván thống kê <select id="batch-count"><option>1</option><option>10</option><option>25</option><option>50</option></select></label>
+    </div>
+    <div class="bot-actions"><button id="bot-start" class="primary">▶ Bắt đầu</button><button id="bot-pause" class="secondary" disabled>⏸ Tạm dừng</button><button id="bot-step" class="secondary">Đi 1 nước</button><button id="bot-reset" class="secondary">Ván mới</button><button id="bot-batch" class="secondary">Chạy thống kê</button></div>
+    <p id="bot-message" class="muted" aria-live="polite">Chọn cấu hình rồi nhấn Bắt đầu. Mọi mô phỏng chạy cục bộ trong trình duyệt.</p>
+    <div class="bot-layout"><div class="bot-board-wrap"><div id="bot-board" class="bot-board" aria-label="Bàn OTTv2"></div><div class="bot-coordinates"><span>a1</span><span>i9</span></div></div>
+      <aside class="bot-side"><h3>Trạng thái ván</h3><p id="bot-turn">Lượt: Đỏ</p><div id="bot-counts" class="counts"></div><h3>Nhật ký nước đi</h3><ol id="bot-moves" class="bot-moves"></ol></aside></div>
+    <div class="bot-stats"><div><span>Số ván</span><strong id="stat-games">0</strong></div><div><span>Đỏ thắng</span><strong id="stat-red">0</strong></div><div><span>Lam thắng</span><strong id="stat-blue">0</strong></div><div><span>Hòa / giới hạn</span><strong id="stat-draw">0</strong></div></div>
+    <p class="muted">Lưu ý: đây là công cụ kiểm thử heuristic cơ bản cho luật OTTv2, chưa phải AI chiến thuật mạnh. Cờ vua, cờ tướng và cờ vây chưa được tích hợp vào Bot Lab này.</p>
+  </section>
+</main><script type="module" src="bot-lab.js"></script>
+</body></html>

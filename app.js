@@ -63,6 +63,13 @@ const elements = {
   board: document.querySelector('#board'),
   deselect: document.querySelector('#deselect'),
   boardNote: document.querySelector('#board-note'),
+  accountStatus: document.querySelector('#account-status'),
+  accountForm: document.querySelector('#account-form'),
+  accountUsername: document.querySelector('#account-username'),
+  accountPassword: document.querySelector('#account-password'),
+  accountLogout: document.querySelector('#account-logout'),
+  gameLog: document.querySelector('#game-log'),
+  refreshLog: document.querySelector('#refresh-log'),
 };
 
 // `crypto.randomUUID` only exists in a secure context, and this server runs on
@@ -92,8 +99,30 @@ function readStored(key, create) {
 }
 
 // Persisted, so a refresh keeps whatever seat you were holding.
-const playerId = readStored('ottv2:player-id', () => randomId(8));
-let playerName = readStored('ottv2:player-name', () => `Guest ${randomId(1)}`);
+
+function readSession(key, create) {
+  try {
+    const saved = sessionStorage.getItem(key);
+    if (saved) return saved;
+
+    const value = create();
+    sessionStorage.setItem(key, value);
+    return value;
+  } catch {
+    return create();
+  }
+}
+
+const playerId = readSession(
+  'ottv2:player-id',
+  () => randomId(8)
+);
+
+let playerName = readSession(
+  'ottv2:player-name',
+  () => `Guest ${randomId(1).toUpperCase()}`
+);
+
 
 let tables = null;
 let presence = null;
@@ -101,6 +130,88 @@ let presences = new Map();
 let currentTableId = new URLSearchParams(window.location.search).get('game');
 const cards = new Map();
 let noticeTimer = null;
+let account = null;
+const loggedGameEvents = new Set();
+
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: { 'content-type': 'application/json', ...(options.headers || {}) },
+    credentials: 'same-origin',
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+}
+
+async function refreshAccount() {
+  try {
+    const data = await api('/api/me', { method: 'GET', headers: {} });
+    account = data.user || null;
+    renderAccount();
+    if (account) await refreshGameLog();
+  } catch {
+    account = null;
+    renderAccount();
+  }
+}
+
+function renderAccount() {
+  if (!elements.accountStatus) return;
+  elements.accountStatus.textContent = account
+    ? `Đã đăng nhập: ${account.username}`
+    : 'Chưa đăng nhập. Đăng ký hoặc đăng nhập để lưu lịch sử trận đấu.';
+  elements.accountForm.querySelector('[type="submit"]').textContent = account ? 'Đang đăng nhập' : 'Đăng nhập / Đăng ký';
+  elements.accountForm.querySelector('[type="submit"]').disabled = Boolean(account);
+  elements.accountLogout.hidden = !account;
+}
+
+async function refreshGameLog() {
+  if (!elements.gameLog || !account) return;
+  try {
+    const data = await api('/api/gamelog', { method: 'GET', headers: {} });
+    elements.gameLog.replaceChildren();
+    if (!data.logs.length) {
+      const item = document.createElement('li');
+      item.textContent = 'Chưa có trận đấu nào được lưu.';
+      elements.gameLog.append(item);
+      return;
+    }
+    for (const log of data.logs) {
+      const item = document.createElement('li');
+      const when = new Date(log.finishedAt).toLocaleString();
+      item.textContent = `${when} · ${log.result} · ${log.opponent} · Bàn ${log.tableId}`;
+      elements.gameLog.append(item);
+    }
+  } catch (error) {
+    showNotice(`Không tải được Game Log: ${error.message}`);
+  }
+}
+
+async function saveGameLog(tableId, table, winner) {
+  if (!account || !table || !winner) return;
+  const eventId = `${tableId}:${table.round ?? 0}:${winner}:${table.winKind ?? ''}`;
+  if (loggedGameEvents.has(eventId)) return;
+  loggedGameEvents.add(eventId);
+  const seat = winner === 1 ? 1 : 2;
+  const mySeat = seatsHeld(table)[0];
+  const result = mySeat === winner ? 'Thắng' : mySeat ? 'Thua' : 'Kết thúc';
+  const opponent = seatName(table, winner === 1 ? 2 : 1);
+  try {
+    await api('/api/gamelog', {
+      method: 'POST',
+      body: JSON.stringify({
+        eventId, tableId, round: table.round ?? 0, result, opponent,
+        winner: seatName(table, winner), winKind: table.winKind || 'unknown',
+        finishedAt: Date.now(),
+      }),
+    });
+    await refreshGameLog();
+  } catch (error) {
+    loggedGameEvents.delete(eventId);
+    showNotice(`Không lưu được Game Log: ${error.message}`);
+  }
+}
 
 // Which square (0-80) the local viewer has picked up, if any. Purely local UI
 // state — never written to shared data, so it never needs to sync and always
@@ -371,6 +482,8 @@ function move(tableId, from, to) {
   if (!piece || piece.player !== mark) return;
   if (!legalMoves(cells, from).some((candidate) => candidate.to === to)) return;
 
+  let finishedResult = null;
+  let finishedTable = null;
   tables.setData((draft) => {
     const draftTable = draft[tableId];
     if (!draftTable) return;
@@ -394,11 +507,14 @@ function move(tableId, from, to) {
       draftTable.winKind = result.kind;
       draftTable.winType = result.type;
       draftTable.winCell = result.cell;
+      finishedResult = result.winner;
+      finishedTable = { ...draftTable, cells: afterCells };
     } else {
       draftTable.turn = mark === 1 ? 2 : 1;
     }
     draftTable.lastActiveAt = Date.now();
   });
+  if (finishedResult && finishedTable) void saveGameLog(tableId, finishedTable, finishedResult);
 }
 
 function rematch(tableId) {
@@ -792,6 +908,52 @@ function handleCellClick(index) {
 
 function wireControls() {
   elements.playerName.value = playerName;
+
+  elements.accountForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const username = elements.accountUsername.value.trim();
+    const password = elements.accountPassword.value;
+    if (!username || !password) {
+      showNotice('Nhập tên tài khoản và mật khẩu trước nhé.');
+      return;
+    }
+    try {
+      const result = await api('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+      account = result.user;
+      elements.accountPassword.value = '';
+      renderAccount();
+      await refreshGameLog();
+      showNotice(`Xin chào ${account.username}!`);
+    } catch (error) {
+      showNotice(`${error.message}. Nếu chưa có tài khoản, máy chủ sẽ tạo tài khoản mới khi bạn chọn Đăng ký.`);
+    }
+  });
+
+  document.querySelector('#account-register')?.addEventListener('click', async () => {
+    const username = elements.accountUsername.value.trim();
+    const password = elements.accountPassword.value;
+    if (!username || !password) return showNotice('Nhập tên tài khoản và mật khẩu để đăng ký.');
+    try {
+      const result = await api('/api/register', { method: 'POST', body: JSON.stringify({ username, password }) });
+      account = result.user;
+      elements.accountPassword.value = '';
+      renderAccount();
+      await refreshGameLog();
+      showNotice('Đăng ký và đăng nhập thành công!');
+    } catch (error) { showNotice(error.message); }
+  });
+
+  elements.accountLogout?.addEventListener('click', async () => {
+    try { await api('/api/logout', { method: 'POST', body: '{}' }); } catch {}
+    account = null;
+    renderAccount();
+    if (elements.gameLog) elements.gameLog.replaceChildren();
+    showNotice('Bạn đã đăng xuất.');
+  });
+  elements.refreshLog?.addEventListener('click', refreshGameLog);
   elements.playerName.addEventListener('change', () => {
     const next = elements.playerName.value.trim().slice(0, 24);
     if (!next || next === playerName) {
@@ -800,7 +962,7 @@ function wireControls() {
     }
     playerName = next;
     try {
-      window.localStorage.setItem('ottv2:player-name', playerName);
+      window.sessionStorage.setItem('ottv2:player-name', playerName);
     } catch {
       // Not fatal; the name still applies for this session.
     }
@@ -849,6 +1011,7 @@ function wireControls() {
 
 async function start() {
   wireControls();
+  await refreshAccount();
 
   await playhtml.init({
     room: ROOM,
